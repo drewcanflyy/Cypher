@@ -208,7 +208,7 @@ export default function App() {
   };
 
   if (!authReady) return <div className="app-loader">Loading your practice space…</div>;
-  if (!user) return <div className="app-shell"><header className="top-nav"><div className="brand"><span><Radio size={17} /></span>CYPHER</div></header><AuthScreen onSubmit={signIn} busy={authBusy} error={authError} /></div>;
+  if (!user) return <div className="app-shell auth-shell"><header className="top-nav"><div className="brand"><span><Radio size={17} /></span>CYPHER</div></header><AuthScreen onSubmit={signIn} busy={authBusy} error={authError} /></div>;
   const shown = filter === 'All' ? scenarios : scenarios.filter(item => item.category === filter);
   const online = health?.status === 'online';
 
