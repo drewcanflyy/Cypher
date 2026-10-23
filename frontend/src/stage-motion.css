@@ -1,0 +1,52 @@
+/* The stage is one normal document scroll. The left narrative stays in place while scenarios pass beside it. */
+.stage {
+  height: auto;
+  min-height: calc(100dvh - 75px);
+  padding-bottom: 7rem;
+}
+
+.scenario-grid {
+  min-height: auto;
+  overflow: visible;
+  padding-right: 0;
+}
+
+@media (min-width: 901px) {
+  .scenario-grid { grid-column: 2; }
+
+  .intro {
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    left: max(1.25rem, calc((100vw - 1540px) / 2 + 3.75rem));
+    min-height: 0;
+    position: fixed;
+    top: 75px;
+    width: min(26vw, 26rem);
+    z-index: 1;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .scenario {
+    animation: scenario-settle both;
+    animation-range: entry 8% cover 38%;
+    animation-timeline: view();
+  }
+}
+
+@keyframes scenario-settle {
+  from { opacity: .15; transform: translateY(34px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 900px) {
+  .stage { min-height: auto; }
+  .intro { min-height: auto; position: static; }
+  .scenario-grid { grid-column: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scenario { animation: none; }
+}

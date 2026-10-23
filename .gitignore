@@ -1,0 +1,44 @@
+# Environment & Secrets
+.env
+*.env
+backend/.env
+.env.*
+!.env.example
+!backend/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/venv/
+venv/
+.venv/
+env/
+.env/
+*.egg-info/
+
+# Database & Local User Data
+*.db
+*.sqlite3
+backend/data/
+data/
+
+# Frontend & Dependencies
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
