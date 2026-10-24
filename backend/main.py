@@ -37,6 +37,12 @@ class ChatRequest(BaseModel):
     custom_role: Optional[str] = None
     voice: Optional[str] = "en-US-GuyNeural"
     level: Optional[str] = "Intermediate"
+    pressure: Optional[int] = 0
+    final_turn: Optional[bool] = False
+    question_number: Optional[int] = 1
+    total_questions: Optional[int] = 9
+    attempt_number: Optional[int] = 1
+    max_attempts: Optional[int] = 3
 
 class TTSRequest(BaseModel):
     text: str
@@ -132,13 +138,48 @@ async def chat_interaction(req: ChatRequest):
         f"\nThe learner selected {level} level. Adapt vocabulary, question complexity, and correction expectations to that level. "
         "Do not announce the level unless the learner asks."
     )
-
+    pressure = max(0, min(req.pressure or 0, 100))
+    if pressure >= 70:
+        system_prompt += (
+            "\nThe conversation is approaching its final moments. Let the roleplay partner sound subtly more pressed for time "
+            "or nervous, while staying believable and professional. Keep the pressure natural; do not describe a meter."
+        )
     dict_messages = [{"role": m.role, "content": m.content} for m in req.messages]
-    reply_text = await ai_service.generate_response(dict_messages, system_prompt)
+    answer_status = await ai_service.classify_answer_attempt(dict_messages)
+    question_number = max(1, req.question_number or 1)
+    total_questions = max(1, req.total_questions or 9)
+    attempt_number = max(1, req.attempt_number or 1)
+    max_attempts = max(1, req.max_attempts or 3)
+
+    if answer_status == "retry" and attempt_number < max_attempts:
+        next_action = "retry"
+        system_prompt += (
+            f"\nThe learner has not answered the current question yet. This is attempt {attempt_number} of {max_attempts}. "
+            "Do NOT move to a new question. Briefly encourage them, give one small hint or sentence starter, then rephrase the SAME question."
+        )
+    else:
+        next_action = "complete" if question_number >= total_questions else "advance"
+        if answer_status == "skip":
+            system_prompt += "\nThe learner explicitly cannot answer this question. Acknowledge it warmly and move directly to the next question without repeating it."
+        elif answer_status == "retry":
+            system_prompt += "\nThe learner used all attempts without answering this question. Acknowledge their effort and move directly to the next question."
+        else:
+            system_prompt += "\nThe learner answered the current question. Give a natural brief response and move to the next question."
+        if next_action == "complete":
+            system_prompt += " This was the final required question. Close the conversation naturally and do not ask another question."
+
+    turn = await ai_service.generate_response(dict_messages, system_prompt, include_turn_analysis=True)
+    if isinstance(turn, str):
+        turn = {"reply": turn, "response_quality": 50, "pressure_delta": 0, "response_signal": "The answer was reviewed."}
 
     return {
-        "reply": reply_text,
-        "scenario_id": req.scenario_id
+        "reply": turn["reply"],
+        "scenario_id": req.scenario_id,
+        "response_quality": turn["response_quality"],
+        "pressure_delta": turn["pressure_delta"],
+        "response_signal": turn["response_signal"],
+        "answer_status": answer_status,
+        "next_action": next_action,
     }
 
 @app.post("/api/tts")
