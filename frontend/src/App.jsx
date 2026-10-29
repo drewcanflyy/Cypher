@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Award, BookOpen, BriefcaseBusiness, Check, CheckCircle2, ChevronRight, Coffee, GraduationCap, Lightbulb, LogOut, Mic, MicOff, Radio, Send, Settings, Sparkles, UserRound, Volume2, VolumeX } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { PartnerPresence, PracticeStage, ProgressPanel, StudioAuth, StudioDialog } from './Studio.jsx';
+import { partnerPortraits, roomImages } from './rooms.js';
+import { ArrowLeft, ArrowUpRight, BookOpen, Check, CheckCircle2, ChevronRight, Lightbulb, Mic, MicOff, Settings, Sparkles, Volume2, VolumeX, Sun, Moon, AudioLines } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const API = 'http://127.0.0.1:8000';
-const categories = ['All', 'Career', 'Education', 'Daily Life', 'Business'];
 const levels = ['Beginner', 'Intermediate', 'Advanced'];
 const fallback = [
   { id: 'tech_interview', title: 'Software engineer interview', category: 'Career', difficulty: 'Mid to senior', partner_name: 'Sarah Chen', partner_role: 'Engineering manager', initial_message: 'Hello. Thanks for taking the time to speak today. Could you briefly introduce yourself and share a technical project you recently worked on?' },
@@ -13,35 +15,21 @@ const fallback = [
   { id: 'casual_coffee_hangout', title: 'Coffee chat', category: 'Daily Life', difficulty: 'Conversational', partner_name: 'Jordan', partner_role: 'Local friend', initial_message: 'Hey, mind if I borrow this chair? By the way, what drink did you get? It looks great.' },
   { id: 'salary_negotiation', title: 'Offer negotiation', category: 'Business', difficulty: 'Advanced', partner_name: 'Arthur Sterling', partner_role: 'Managing director', initial_message: 'We were impressed with your interviews. We’d like to extend an offer at $65,000 per year with benefits. What are your thoughts?' },
 ];
-const iconFor = { Career: BriefcaseBusiness, Education: GraduationCap, 'Daily Life': Coffee, Business: Award };
-const imageFor = { tech_interview: '/scenarios/tech-interview.png', general_job_interview: '/scenarios/behavioral-interview.png', university_presentation: '/scenarios/university-defense.png', school_interaction: '/scenarios/college-office.png', casual_coffee_hangout: '/scenarios/coffee-chat.png', salary_negotiation: '/scenarios/offer-negotiation.png' };
 const sessionRules = { Beginner: { questions: 9 }, Intermediate: { questions: 12 }, Advanced: { questions: 15 } };
 const voiceOptions = [{ value: 'en-US-GuyNeural', label: 'Male · US' }, { value: 'en-US-AriaNeural', label: 'Female · US' }, { value: 'en-GB-RyanNeural', label: 'Male · UK' }, { value: 'en-GB-SoniaNeural', label: 'Female · UK' }];
 
-function Scenario({ item, index, choose }) {
-  const Icon = iconFor[item.category] || Radio;
-  return <article className={`scenario ${index === 0 ? 'featured' : ''}`} style={{ '--scenario-image': `url(${imageFor[item.id] || imageFor.tech_interview})` }}>
-    <div><div className="scenario-meta"><span>{String(index + 1).padStart(2, '0')}</span><span>{item.difficulty}</span></div><div className="scenario-icon"><Icon size={20} strokeWidth={1.5} /></div><p className="category">{item.category}</p><h2>{item.title}</h2><p className="partner">With {item.partner_name}<span>{item.partner_role}</span></p><p className="prompt">“{item.initial_message}”</p></div>
-    <button className="scenario-start" onClick={() => choose(item)}>Choose level <ArrowUpRight size={17} /></button>
-  </article>;
-}
-
-function AuthScreen({ onSubmit, busy, error }) {
-  const [mode, setMode] = useState('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const submit = event => { event.preventDefault(); onSubmit(mode, { display_name: name, email, password }); };
-  return <main className="auth-page"><section className="auth-intro"><div className="auth-badge-wrap"><img src="/logo.png" alt="CYPHER Logo" className="auth-badge-logo" /><span className="eyebrow" style={{ margin: 0 }}>English practice, made personal</span></div><h1>Every conversation knows where you left off.</h1><p>Keep your rooms, speaking reports, and progress in one private panel.</p><div className="auth-benefits"><span><Check size={16} />Personal practice history</span><span><Check size={16} />Choose your own level</span><span><Check size={16} />Voice or text answers</span></div></section><section className="auth-card"><div><p className="eyebrow">Welcome to CYPHER</p><h2>{mode === 'login' ? 'Pick up where you left off.' : 'Create your practice space.'}</h2></div><div className="auth-tabs"><button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Sign in</button><button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>Create account</button></div><form onSubmit={submit}>{mode === 'register' && <label>Your name<input required value={name} onChange={event => setName(event.target.value)} placeholder="Souhail" /></label>}<label>Email<input required type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></label><label>Password<input required minLength="8" type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 8 characters" /></label>{error && <p className="auth-error">{error}</p>}<button className="primary auth-submit" disabled={busy}>{busy ? 'One moment...' : mode === 'login' ? 'Sign in' : 'Create account'}<ArrowUpRight size={18} /></button></form></section></main>;
-}
-
 export default function App() {
+  const reduceMotion = useReducedMotion();
   const [view, setView] = useState('stage');
+  const [theme, setTheme] = useState(() => localStorage.getItem('cypher-theme') || 'dark');
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('cypher-theme', theme);
+  }, [theme]);
   const [scenarios, setScenarios] = useState(fallback);
   const [active, setActive] = useState(null);
   const [pendingScenario, setPendingScenario] = useState(null);
   const [level, setLevel] = useState('Intermediate');
-  const [filter, setFilter] = useState('All');
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [recording, setRecording] = useState(false);
@@ -76,12 +64,13 @@ export default function App() {
   const playbackRequest = useRef(0);
   const end = useRef(null);
 
+
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     if (!token) return;
-    const response = await fetch(`${API}/api/dashboard`, { headers: authHeaders });
+    const response = await fetch(`${API}/api/dashboard`, { headers: { Authorization: `Bearer ${token}` } });
     if (response.ok) setDashboard(await response.json());
-  };
+  }, [token]);
 
   useEffect(() => {
     const loadPublicData = async () => {
@@ -99,7 +88,7 @@ export default function App() {
     const restoreUser = async () => {
       if (!token) { setAuthReady(true); return; }
       try {
-        const response = await fetch(`${API}/api/auth/me`, { headers: authHeaders });
+        const response = await fetch(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
         if (!response.ok) throw new Error();
         setUser(await response.json());
         await loadDashboard();
@@ -109,12 +98,13 @@ export default function App() {
       } finally { setAuthReady(true); }
     };
     restoreUser();
-  }, [token]);
+  }, [token, loadDashboard]);
 
   useEffect(() => {
     // Some browsers return a Promise from smooth scrolling. Effects must only
     // return a cleanup function, otherwise React unmounts the entire app.
-    end.current?.scrollIntoView({ behavior: 'smooth' });
+    const stream = end.current?.closest('.stream');
+    stream?.scrollTo({ top: stream.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   }, [messages, replying]);
   useEffect(() => { localStorage.setItem('cypher-voice', voice); }, [voice]);
   useEffect(() => () => {
@@ -127,6 +117,17 @@ export default function App() {
     player.current.pause(); player.current.currentTime = 0;
     window.speechSynthesis?.cancel();
     setSpeakingId(null);
+  };
+  const navigate = nextView => {
+    stopPlayback();
+    if (recorder.current?.state === 'recording') {
+      recorder.current.onstop = null;
+      recorder.current.stop();
+    }
+    recordingStream.current?.getTracks().forEach(track => track.stop());
+    setRecording(false);
+    setView(nextView);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
   const changeVoice = value => { stopPlayback(); setVoice(value); };
   const play = (value, id) => {
@@ -166,11 +167,11 @@ export default function App() {
     finally { setAuthBusy(false); }
   };
 
-  const signOut = () => { localStorage.removeItem('cypher-token'); setToken(''); setUser(null); setDashboard(null); setView('stage'); };
+  const signOut = () => { localStorage.removeItem('cypher-token'); setToken(''); setUser(null); setDashboard(null); navigate('stage'); };
   const chooseScenario = item => { setPendingScenario(item); setLevel('Intermediate'); };
   const start = () => {
     if (!pendingScenario) return;
-    setActive(pendingScenario); setMessages([{ role: 'assistant', content: pendingScenario.initial_message }]); setReport(null); setPressure(12); setResponseSignal('The conversation starts calm. Your answers will shape the pressure.'); setCompletedQuestions(0); setAttemptsUsed(0); setConversationComplete(false); setNotice(''); setPendingScenario(null); setView('booth');
+    setActive(pendingScenario); setMessages([{ role: 'assistant', content: pendingScenario.initial_message }]); setReport(null); setPressure(12); setResponseSignal('The conversation starts calm. Your answers will shape the pressure.'); setCompletedQuestions(0); setAttemptsUsed(0); setConversationComplete(false); setNotice(''); setPendingScenario(null); navigate('booth');
   };
 
   const sendText = async value => {
@@ -190,7 +191,7 @@ export default function App() {
       setMessages([...next, { role: 'assistant', content: reply }]);
       if (data.next_action === 'retry') {
         setAttemptsUsed(attemptNumber);
-        setNotice(`Same question — attempt ${attemptNumber} of 3. The AI gave you a hint, so try again.`);
+        setNotice(`Same question .  attempt ${attemptNumber} of 3. The AI gave you a hint, so try again.`);
       } else {
         setCompletedQuestions(questionNumber);
         setAttemptsUsed(0);
@@ -249,7 +250,7 @@ export default function App() {
     try {
       const response = await fetch(`${API}/api/assess`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario_id: active.id, conversation: messages, level }) });
       if (!response.ok) throw new Error();
-      const data = await response.json(); setReport(data); setView('assessment'); savePractice(data);
+      const data = await response.json(); setReport(data); navigate('assessment'); savePractice(data);
       if (data.overall_score >= 75) confetti({ particleCount: 70, spread: 55, origin: { y: .58 }, colors: ['#f0785a', '#f3eadf', '#9bb3c8'] });
     } catch { setNotice('We could not create your assessment. Check the backend and try again.'); }
     finally { setGrading(false); }
@@ -262,21 +263,43 @@ export default function App() {
     } catch { setNotice('We could not save those settings. Check the backend.'); }
   };
 
-  if (!authReady) return <div className="app-loader">Loading your practice space…</div>;
-  if (!user) return <div className="app-shell auth-shell"><header className="top-nav"><div className="brand"><img src="/logo.png" alt="CYPHER Logo" className="brand-logo" />CYPHER</div></header><AuthScreen onSubmit={signIn} busy={authBusy} error={authError} /></div>;
-  const shown = filter === 'All' ? scenarios : scenarios.filter(item => item.category === filter);
+  const toggleTheme = () => setTheme(current => current === 'dark' ? 'light' : 'dark');
+  const themeControl = <button className="round-button theme-control" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Use light appearance' : 'Use dark appearance'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>;
+  if (!authReady) return <div className="app-loader"><AudioLines size={38} /><span>Opening your studio</span><div className="loading-line" /></div>;
+  if (!user) return <div className="app-shell auth-shell"><header className="top-nav auth-nav"><div className="brand"><img src="/logo.png" alt="" className="brand-logo" />CYPHER<span className="brand-descriptor">Conversation studio</span></div><div className="nav-tools">{themeControl}</div></header><StudioAuth onSubmit={signIn} busy={authBusy} error={authError} /></div>;
   const online = health?.status === 'online';
   const rules = sessionRules[level];
-  const pressureLabel = pressure >= 100 ? 'Conversation complete' : pressure >= 70 ? 'Final pressure' : pressure >= 35 ? 'Building pressure' : 'Calm start';
+  const pressureLabel = pressure >= 75 ? 'Under pressure' : pressure >= 40 ? 'Getting tense' : 'At ease';
+  const openSavedReport = session => { setReport(session.assessment); setLevel(session.level); navigate('assessment'); window.scrollTo({ top: 0 }); };
 
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a><header className="top-nav"><button className="brand" onClick={() => setView('stage')} aria-label="Return to practice"><img src="/logo.png" alt="CYPHER Logo" className="brand-logo" />CYPHER</button><nav><button className={view === 'stage' ? 'active' : ''} onClick={() => setView('stage')}>Practice</button><button className={view === 'dashboard' || view === 'assessment' ? 'active' : ''} onClick={() => setView('dashboard')}>Your panel</button></nav><div className="nav-tools"><span className={online ? 'status online' : 'status'}><i />{online ? 'Ready' : 'Demo mode'}</span><button className="user-button" onClick={() => setView('dashboard')}><UserRound size={16} />{user.display_name}</button><button className="round-button" onClick={() => setSettingsOpen(true)} aria-label="Open settings"><Settings size={19} /></button></div></header>{notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Dismiss">×</button></div>}
+  return <div className="app-shell">
+    <a className="skip-link" href="#main-content">Skip to content</a>
+    <header className="top-nav">
+      <button className="brand" onClick={() => navigate('stage')} aria-label="Return to practice"><img src="/logo.png" alt="" className="brand-logo" />CYPHER<span className="brand-descriptor">Conversation studio</span></button>
+      <nav aria-label="Main navigation"><button className={view === 'stage' || view === 'booth' ? 'active' : ''} aria-current={view === 'stage' || view === 'booth' ? 'page' : undefined} onClick={() => navigate('stage')}>{(view === 'stage' || view === 'booth') && <motion.span className="nav-active-pill" layoutId="main-nav-pill" transition={{ type: 'spring', bounce: 0, duration: reduceMotion ? 0.01 : 0.38 }} />}<span className="nav-label">Practice</span></button><button className={view === 'dashboard' || view === 'assessment' ? 'active' : ''} aria-current={view === 'dashboard' || view === 'assessment' ? 'page' : undefined} onClick={() => navigate('dashboard')}>{(view === 'dashboard' || view === 'assessment') && <motion.span className="nav-active-pill" layoutId="main-nav-pill" transition={{ type: 'spring', bounce: 0, duration: reduceMotion ? 0.01 : 0.38 }} />}<span className="nav-label">Your panel</span></button></nav>
+      <div className="nav-tools"><span className={online ? 'status online' : 'status'}><i />{online ? 'Connected' : 'Offline'}</span>{themeControl}<button className="round-button" onClick={() => setSettingsOpen(true)} aria-label="Open settings"><Settings size={18} /></button><button className="user-button" onClick={() => navigate('dashboard')} aria-label={`Open ${user.display_name}'s panel`}><span>{user.display_name.charAt(0).toUpperCase()}</span><b>{user.display_name}</b></button></div>
+    </header>
+    <AnimatePresence>{notice && <motion.div className="notice" role="status" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -14, x: '-50%', scale: 0.98 }} animate={{ opacity: 1, y: 0, x: '-50%', scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10, x: '-50%', scale: 0.98 }} transition={reduceMotion ? { duration: 0.12 } : { type: 'spring', bounce: 0, duration: 0.34 }}><AudioLines size={17} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss notice">×</button></motion.div>}</AnimatePresence>
     <main id="main-content">
-      {view === 'stage' && <section className="stage"><div className="intro"><p className="eyebrow">Practice rooms</p><h1>Speak like you mean it.</h1><p>Pick a room. We will handle the pressure.</p><div className="filters">{categories.map(item => <button key={item} className={filter === item ? 'selected' : ''} onClick={() => setFilter(item)}>{item}</button>)}</div></div><div className="scenario-grid">{shown.map((item, index) => <Scenario key={item.id} item={item} index={index} choose={chooseScenario} />)}</div></section>}
-      {view === 'booth' && active && <section className="booth"><div className="conversation"><header className="conversation-head"><button className="back" onClick={() => setView('stage')}><ArrowLeft size={17} />Back</button><div><p>Live practice · {level}</p><h1>{active.title}</h1><span>{active.partner_name} · {active.partner_role}</span></div><div className="voice-tools"><label className="voice-select">Partner voice<select value={voice} onChange={event => changeVoice(event.target.value)}>{voiceOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="voice" onClick={() => setVoiceOn(value => !value)}>{voiceOn ? <Volume2 size={18} /> : <VolumeX size={18} />}Auto voice {voiceOn ? 'on' : 'off'}</button></div></header><div className="stream" aria-live="polite"><section className={`session-meter ${conversationComplete ? 'complete' : ''}`}><div><span>Question <b>{conversationComplete ? rules.questions : completedQuestions + 1}</b> of {rules.questions}</span><span>{conversationComplete ? 'Complete' : `Attempt ${attemptsUsed + 1} of 3`}</span></div><div className="pressure-line"><i style={{ '--pressure': `${pressure}%` }} /></div><small><strong>{pressureLabel}</strong>{conversationComplete ? ' · The agent is ready to score this conversation.' : ` · ${responseSignal}`}</small></section>{messages.map((item, index) => { const messageId = `${item.role}-${index}`; return <article className={`message ${item.role}`} key={messageId}><span className={`avatar ${item.role === 'assistant' ? `pressure-${Math.min(4, Math.ceil(pressure / 25))}` : ''}`}>{item.role === 'assistant' ? active.partner_name.charAt(0) : 'Y'}</span><div><p>{item.role === 'assistant' ? active.partner_name : 'You'}</p><div>{item.content}</div>{item.role === 'assistant' && <button onClick={() => play(item.content, messageId)}>{speakingId === messageId ? <VolumeX size={14} /> : <Volume2 size={14} />}{speakingId === messageId ? 'Stop listening' : 'Listen again'}</button>}</div></article>; })}{replying && <article className="message assistant pending"><span className="avatar">{active.partner_name.charAt(0)}</span><div><p>{active.partner_name}</p><div>Thinking of the next question<span className="dots">...</span></div></div></article>}<div ref={end} /></div><form className={`composer ${recording ? 'recording' : ''}`} onSubmit={send}><button type="button" onClick={toggleMic} disabled={transcribing || replying || conversationComplete} className="mic" aria-label={recording ? 'Stop recording' : 'Start recording'}>{recording ? <MicOff size={20} /> : <Mic size={20} />}</button><input value={text} onChange={event => setText(event.target.value)} disabled={recording || transcribing || conversationComplete} placeholder={conversationComplete ? 'This conversation is complete — open your feedback.' : recording ? 'Recording your answer…' : transcribing ? 'Turning your voice into text…' : 'Type your answer here'} aria-label="Your answer" autoComplete="off" /><button className="send" disabled={!text.trim() || replying || recording || transcribing || conversationComplete} aria-label="Send"><Send size={19} /></button>{recording && <small><i />Recording — tap mic to send</small>}</form></div><aside className="coach"><div className="coach-title"><Sparkles size={20} /><div><p>Your AI coach</p><h2>{conversationComplete ? 'Your session is ready.' : 'Find the sharper answer.'}</h2></div></div><button onClick={() => setText('The turning point was...')} disabled={conversationComplete}><Lightbulb size={19} /><span><strong>Try a precise transition</strong><small>For example, the turning point was...</small></span><ChevronRight size={18} /></button><button onClick={() => setText('What I learned from that was...')} disabled={conversationComplete}><BookOpen size={19} /><span><strong>Highlight what you learned</strong><small>Make the takeaway specific.</small></span><ChevronRight size={18} /></button><div /><button className="primary" onClick={assess} disabled={grading || messages.length < 2}>{grading ? 'Reading your session...' : conversationComplete ? 'View final score' : 'Finish & get feedback'}<ArrowUpRight size={18} /></button></aside></section>}
-      {view === 'dashboard' && <section className="dashboard"><header className="dashboard-head"><div><p className="eyebrow">{user.display_name}'s practice space</p><h1>Your speaking history.</h1><p>Every completed practice is kept here, with its level and score.</p></div><div className="session-count"><small>Completed rooms</small><strong>{dashboard?.session_count || 0}</strong></div></header>{dashboard?.sessions?.length ? <div className="history-list">{dashboard.sessions.map(session => <article key={session.id}><div><p>{session.scenario_id.replaceAll('_', ' ')}</p><span>{session.level} · {new Date(session.created_at).toLocaleDateString()}</span></div><strong>{session.assessment?.overall_score ?? '—'}<small>{session.assessment ? '/100' : 'Awaiting score'}</small></strong></article>)}</div> : <section className="empty-panel"><Sparkles size={26} /><h2>Your first room is waiting.</h2><p>Choose a situation, practise by voice or text, then finish it to see your progress here.</p><button className="primary" onClick={() => setView('stage')}>Find a practice room<ArrowUpRight size={17} /></button></section>}<button className="sign-out" onClick={signOut}><LogOut size={16} />Sign out</button></section>}
-      {view === 'assessment' && report && <section className="assessment"><button className="back" onClick={() => setView('dashboard')}><ArrowLeft size={17} />Back to your panel</button><header className="assessment-head"><div><p className="eyebrow">Your speaking snapshot · {level}</p><h1>{report.cefr_label || 'A clear picture of your speaking'}</h1><p>{report.summary}</p></div><div className="score"><div><small>CEFR</small><b>{report.cefr_level}</b></div><div><small>Your score</small><strong>{report.overall_score}</strong><span>/100</span></div></div></header><section className="skills">{Object.entries(report.pillars || {}).map(([name, value]) => <div key={name}><section><b>{name.replace(/_/g, ' ')}</b><p>{value.feedback}</p></section><aside><i style={{ '--score': `${value.score}%` }} /><b>{value.score}</b><small>/100</small></aside></div>)}</section><div className="feedback"><section><i><Check size={20} /></i><h2>What landed</h2><ul>{(report.strengths || []).map(item => <li key={item}><CheckCircle2 size={16} />{item}</li>)}</ul></section><section><i><ArrowUpRight size={20} /></i><h2>Try next</h2><ul>{(report.actionable_drills || []).map(item => <li key={item}><span />{item}</li>)}</ul></section></div><section className="corrections"><p className="eyebrow">Corrections from your response</p><h2>Small changes, clearer English.</h2>{report.corrections?.length ? report.corrections.map((item, index) => <article key={index}><div><small>You said</small><p>{item.original}</p></div><ChevronRight size={19} /><div><small>Try instead</small><p>{item.improved}</p></div><em>{item.explanation}</em></article>) : <p className="empty">No major corrections were found. Keep building range through longer answers.</p>}</section><button className="primary again" onClick={() => setView('stage')}>Practice again<ArrowUpRight size={18} /></button></section>}
+      {view === 'stage' && <PracticeStage scenarios={scenarios} choose={chooseScenario} />}
+      {view === 'booth' && active && <section className="booth">
+        <div className="conversation">
+          <header className="conversation-head"><button className="back" onClick={() => { stopPlayback(); navigate('stage'); }} aria-label="Back to practice rooms"><ArrowLeft size={19} /></button><div><p>{active.category} practice <span>{level}</span></p><h1>{active.title}</h1></div><div className="voice-tools"><label className="voice-select">Partner voice<select value={voice} onChange={event => changeVoice(event.target.value)}>{voiceOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className={`voice ${voiceOn ? 'enabled' : ''}`} aria-pressed={voiceOn} onClick={() => { if (voiceOn) stopPlayback(); setVoiceOn(value => !value); }}>{voiceOn ? <Volume2 size={18} /> : <VolumeX size={18} />}<span>Auto voice {voiceOn ? 'on' : 'off'}</span></button></div></header>
+          <section className={`session-meter ${conversationComplete ? 'complete' : ''}`}><div><span>Question <b>{Math.min(completedQuestions + 1, rules.questions)}</b><span className="meter-muted"> / {rules.questions}</span></span><span>{conversationComplete ? 'Session complete' : `Attempt ${attemptsUsed + 1} of 3`}</span></div><div className="question-segments" aria-label={`${completedQuestions} of ${rules.questions} questions complete`}>{Array.from({length: rules.questions}, (_, index) => <i key={index} className={index < completedQuestions ? 'filled' : index === completedQuestions ? 'current' : ''} />)}</div></section>
+          <div className="stream" aria-live="polite"><AnimatePresence initial={false}>{messages.map((item, index) => { const messageId = `${item.role}-${index}`; return <motion.article layout={!reduceMotion} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={reduceMotion ? { duration: 0.12 } : { type: 'spring', bounce: 0, duration: 0.36 }} className={`message ${item.role}`} key={messageId}><span className="avatar">{item.role === 'assistant' ? <AudioLines size={17} /> : user.display_name.charAt(0)}</span><div><p>{item.role === 'assistant' ? active.partner_name : 'You'}<span>{item.role === 'assistant' ? 'AI partner' : ''}</span></p><div>{item.content}</div>{item.role === 'assistant' && <button className={speakingId === messageId ? 'is-playing' : ''} onClick={() => play(item.content, messageId)}>{speakingId === messageId ? <VolumeX size={14} /> : <Volume2 size={14} />}{speakingId === messageId ? 'Stop listening' : 'Listen again'}</button>}</div></motion.article>; })}{replying && <motion.article key="replying" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="message assistant pending"><span className="avatar"><AudioLines size={17} /></span><div><p>{active.partner_name}</p><div className="thinking-dots" aria-label="Preparing a reply"><i /><i /><i /></div></div></motion.article>}</AnimatePresence><div ref={end} /></div>
+          <div className="composer-area"><form className={`composer ${recording ? 'recording' : ''}`} onSubmit={send}><button type="button" onClick={() => { stopPlayback(); toggleMic(); }} disabled={transcribing || replying || conversationComplete} className="mic" aria-label={recording ? 'Stop recording' : 'Start recording'}>{recording ? <MicOff size={21} /> : <Mic size={21} />}</button><input value={text} onChange={event => setText(event.target.value)} disabled={recording || transcribing || conversationComplete} placeholder={conversationComplete ? 'Your session is complete. Time to reflect.' : recording ? 'Recording... tap the mic to send' : transcribing ? 'Turning your voice into text...' : 'Your thoughts, in your own words...'} aria-label="Your answer" autoComplete="off" /><button className="send" disabled={!text.trim() || replying || recording || transcribing || conversationComplete} aria-label="Send answer"><ArrowUpRight size={21} /></button></form><p className="composer-caption">{recording ? 'Microphone is recording. Tap again to stop and send.' : 'Speak naturally or type your answer. Take your time.'}<span>Enter to send</span></p></div>
+        </div>
+        <aside className="coach">
+          <PartnerPresence active={active} pressure={pressure} speaking={speakingId !== null} replying={replying} recording={recording} complete={conversationComplete} />
+          <section className="pressure-feedback"><span className="eyebrow">{pressureLabel}</span><p>{responseSignal}</p></section>
+          <div className="coach-title"><Sparkles size={17} /><h2>A little help, if you need it.</h2></div><button className="coach-hint" onClick={() => setText('The turning point was...')} disabled={conversationComplete}><Lightbulb size={18} /><span><strong>Find a starting point</strong><small>“The turning point was...”</small></span><ChevronRight size={16} /></button><button className="coach-hint" onClick={() => setText('What I learned from that was...')} disabled={conversationComplete}><BookOpen size={18} /><span><strong>Share a takeaway</strong><small>“What I learned was...”</small></span><ChevronRight size={16} /></button>
+          <div className="coach-finish"><button className="primary" onClick={() => { stopPlayback(); assess(); }} disabled={grading || replying || recording || transcribing || messages.length < 2}>{grading ? 'Preparing your report...' : conversationComplete ? 'View your speaking report' : 'Finish & get feedback'}<ArrowUpRight size={18} /></button><p>Your feedback is saved to your panel.</p></div>
+        </aside>
+      </section>}
+      {view === 'dashboard' && <ProgressPanel user={user} dashboard={dashboard} scenarios={scenarios} practice={() => navigate('stage')} signOut={signOut} openReport={openSavedReport} />}
+      {view === 'assessment' && report && <section className="assessment"><button className="back" onClick={() => navigate('dashboard')}><ArrowLeft size={17} />Back to your panel</button><header className="assessment-head"><div><p className="eyebrow">Your speaking snapshot · {level}</p><h1>{report.cefr_label || 'A clear picture of your speaking'}</h1><p>{report.summary}</p></div><div className="score"><div><small>CEFR</small><b>{report.cefr_level}</b></div><div><small>Your score</small><strong>{report.overall_score}</strong><span>/100</span></div></div></header><section className="skills">{Object.entries(report.pillars || {}).map(([name, value]) => <div key={name}><section><b>{name.replace(/_/g, ' ')}</b><p>{value.feedback}</p></section><aside><i style={{ '--score': `${value.score}%` }} /><b>{value.score}</b><small>/100</small></aside></div>)}</section><div className="feedback"><section><i><Check size={20} /></i><h2>What landed</h2><ul>{(report.strengths || []).map(item => <li key={item}><CheckCircle2 size={16} />{item}</li>)}</ul></section><section><i><ArrowUpRight size={20} /></i><h2>Try next</h2><ul>{(report.actionable_drills || []).map(item => <li key={item}><span />{item}</li>)}</ul></section></div><section className="corrections"><p className="eyebrow">Corrections from your response</p><h2>Small changes, clearer English.</h2>{report.corrections?.length ? report.corrections.map((item, index) => <article key={index}><div><small>You said</small><p>{item.original}</p></div><ChevronRight size={19} /><div><small>Try instead</small><p>{item.improved}</p></div><em>{item.explanation}</em></article>) : <p className="empty">No major corrections were found. Keep building range through longer answers.</p>}</section><button className="primary again" onClick={() => navigate('stage')}>Practice again<ArrowUpRight size={18} /></button></section>}
     </main>
-    {pendingScenario && <div className="modal" onMouseDown={() => setPendingScenario(null)}><section className="level-picker" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}><p className="eyebrow">{pendingScenario.category} practice</p><h2>Choose your challenge.</h2><p>Start at the level that feels right today. Your partner will adapt the vocabulary, pace, and questions.</p><div>{levels.map(item => <button key={item} className={level === item ? 'selected' : ''} onClick={() => setLevel(item)}><strong>{item}</strong><span>{item === 'Beginner' ? 'Short prompts and useful support.' : item === 'Intermediate' ? 'Natural back-and-forth conversation.' : 'Nuanced questions and precise feedback.'}</span></button>)}</div><footer><button className="secondary" onClick={() => setPendingScenario(null)}>Cancel</button><button className="primary" onClick={start}>Start {level}<ArrowUpRight size={17} /></button></footer></section></div>}
-    {settingsOpen && <div className="modal" onMouseDown={() => setSettingsOpen(false)}><section role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}><header><div><p className="eyebrow">Connection</p><h2>Practice settings</h2></div><button className="round-button" onClick={() => setSettingsOpen(false)}>×</button></header><label>Groq API key<input type="password" value={key} placeholder="gsk_..." onChange={event => setKey(event.target.value)} /></label><label>Google Colab URL<input type="url" value={colab} placeholder="https://your-tunnel.trycloudflare.com" onChange={event => setColab(event.target.value)} /></label><label>Voice persona<select value={voice} onChange={event => changeVoice(event.target.value)}>{voiceOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><footer><button className="secondary" onClick={() => setSettingsOpen(false)}>Cancel</button><button className="primary" onClick={saveSettings}>Save settings<ArrowUpRight size={17} /></button></footer></section></div>}
+    <AnimatePresence>{pendingScenario && <StudioDialog close={() => setPendingScenario(null)} title="Choose your practice level" className="level-picker"><div className="level-room-image" style={{ backgroundImage: `url(${partnerPortraits[pendingScenario.id] || roomImages[pendingScenario.id] || roomImages.tech_interview})` }} /><div className="level-body"><span className="eyebrow">{pendingScenario.category} practice</span><h2>Find your<br /><span>comfort zone.</span></h2><p>Choose your level. Your partner will meet you there.</p><div className="level-options">{levels.map((item, index) => <button key={item} aria-pressed={level === item} className={level === item ? 'selected' : ''} onClick={() => setLevel(item)}><span className="level-bars">{[0, 1, 2].map(bar => <i key={bar} className={bar <= index ? 'filled' : ''} />)}</span><span><strong>{item}</strong><small>{item === 'Beginner' ? 'A helping hand to get you talking.' : item === 'Intermediate' ? 'Keep it natural. Go a little deeper.' : 'Nuance, precision, and a real challenge.'}</small></span><span className="level-count">{sessionRules[item].questions} questions</span><span className="level-check">{level === item && <Check size={13} />}</span></button>)}</div><p className="level-reassurance"><Mic size={14} />Voice or text. Up to 3 attempts per question. No timer.</p><footer><button className="primary" onClick={start}>Enter the conversation<ArrowUpRight size={18} /></button></footer></div></StudioDialog>}</AnimatePresence>
+    <AnimatePresence>{settingsOpen && <StudioDialog close={() => setSettingsOpen(false)} title="Practice settings" className="settings-dialog"><span className="section-kicker"><Settings size={17} /> Make yourself comfortable</span><h2>Practice settings</h2><label>Partner voice<select value={voice} onChange={event => changeVoice(event.target.value)}>{voiceOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><p className="field-help">Your voice choice saves automatically.</p><details className="connection-settings"><summary>Connection settings<ChevronRight size={16} /></summary><label>Groq API key<input type="password" value={key} placeholder="gsk_..." onChange={event => setKey(event.target.value)} /></label><label>Google Colab URL<input type="url" value={colab} placeholder="https://your-backend.example.com" onChange={event => setColab(event.target.value)} /></label></details><footer><button className="secondary" onClick={() => setSettingsOpen(false)}>Close</button><button className="primary" onClick={saveSettings}>Save settings<Check size={17} /></button></footer></StudioDialog>}</AnimatePresence>
   </div>;
 }
